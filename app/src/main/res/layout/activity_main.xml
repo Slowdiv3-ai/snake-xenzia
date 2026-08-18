@@ -5,7 +5,8 @@
     android:orientation="vertical"
     android:gravity="center"
     android:background="#000000"
-    android:padding="20dp">
+    android:padding="20dp"
+    android:id="@+id/mainLayout">
     
     <LinearLayout
         android:layout_width="match_parent"
@@ -33,8 +34,8 @@
         
     </LinearLayout>
     
-    <com.snake.xenzia.GameView
-        android:id="@+id/gameView"
+    <FrameLayout
+        android:id="@+id/gameContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"/>
