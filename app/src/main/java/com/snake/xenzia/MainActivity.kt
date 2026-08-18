@@ -11,8 +11,8 @@ import android.os.Looper
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.TextView
-import com.snake.xenzia.R
 
 class MainActivity : Activity() {
     
@@ -25,10 +25,14 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         
-        gameView = findViewById(R.id.gameView)
         scoreText = findViewById(R.id.scoreText)
         highScoreText = findViewById(R.id.highScoreText)
         restartButton = findViewById(R.id.restartButton)
+        val gameContainer = findViewById<FrameLayout>(R.id.gameContainer)
+        
+        // Create GameView programmatically
+        gameView = GameView(this)
+        gameContainer.addView(gameView)
         
         val highScore = getSharedPreferences("snake_prefs", Context.MODE_PRIVATE)
             .getInt("high_score", 0)
