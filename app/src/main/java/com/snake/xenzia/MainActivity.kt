@@ -5,12 +5,14 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 
 class MainActivity : Activity() {
@@ -19,6 +21,8 @@ class MainActivity : Activity() {
     private lateinit var scoreText: TextView
     private lateinit var highScoreText: TextView
     private lateinit var restartButton: Button
+    private lateinit var menuOverlay: LinearLayout
+    private lateinit var btnPause: Button
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +31,8 @@ class MainActivity : Activity() {
         scoreText = findViewById(R.id.scoreText)
         highScoreText = findViewById(R.id.highScoreText)
         restartButton = findViewById(R.id.restartButton)
+        menuOverlay = findViewById(R.id.menuOverlay)
+        btnPause = findViewById(R.id.btnPause)
         val gameContainer = findViewById<FrameLayout>(R.id.gameContainer)
         
         gameView = GameView(this)
@@ -51,26 +57,64 @@ class MainActivity : Activity() {
         }
         findViewById<Button>(R.id.btnCenter).setOnClickListener {
             if (!gameView.isGameRunning()) {
-                gameView.startGame()
+                startGame()
             }
         }
         
-        // A button = Restart
+        // A button = Start game
         findViewById<Button>(R.id.btnA).setOnClickListener {
-            gameView.restartGame()
+            startGame()
         }
         
-        // B button = Start/Pause
+        // B button = Back to menu
         findViewById<Button>(R.id.btnB).setOnClickListener {
+            showMenu()
+        }
+        
+        // Pause button
+        btnPause.setOnClickListener {
             if (gameView.isGameRunning()) {
-                gameView.pauseGame()
-            } else {
-                gameView.startGame()
+                if (gameView.isPaused()) {
+                    gameView.resumeGame()
+                    btnPause.text = "PAUSE"
+                } else {
+                    gameView.pauseGame()
+                    btnPause.text = "RESUME"
+                }
             }
         }
         
         restartButton.setOnClickListener {
-            gameView.restartGame()
+            startGame()
+        }
+        
+        // Menu buttons
+        findViewById<Button>(R.id.menuStart).setOnClickListener {
+            startGame()
+        }
+        
+        findViewById<Button>(R.id.levelEasy).setOnClickListener {
+            gameView.setSpeed("easy")
+        }
+        findViewById<Button>(R.id.levelMedium).setOnClickListener {
+            gameView.setSpeed("medium")
+        }
+        findViewById<Button>(R.id.levelHard).setOnClickListener {
+            gameView.setSpeed("hard")
+        }
+        
+        findViewById<Button>(R.id.soundToggle).setOnClickListener {
+            // Sound toggle (placeholder)
+            val btn = findViewById<Button>(R.id.soundToggle)
+            if (btn.text == "SOUND: ON") {
+                btn.text = "SOUND: OFF"
+            } else {
+                btn.text = "SOUND: ON"
+            }
+        }
+        
+        findViewById<Button>(R.id.menuQuit).setOnClickListener {
+            finish()
         }
         
         gameView.setScoreListener(object : GameView.ScoreListener {
@@ -79,6 +123,20 @@ class MainActivity : Activity() {
                 highScoreText.text = "High: $highScore"
             }
         })
+        
+        // Show menu initially
+        showMenu()
+    }
+    
+    private fun startGame() {
+        menuOverlay.visibility = View.GONE
+        btnPause.text = "PAUSE"
+        gameView.startGame()
+    }
+    
+    private fun showMenu() {
+        gameView.stopGame()
+        menuOverlay.visibility = View.VISIBLE
     }
     
     override fun onPause() {
@@ -88,7 +146,9 @@ class MainActivity : Activity() {
     
     override fun onResume() {
         super.onResume()
-        gameView.resumeGame()
+        if (!menuOverlay.isShown) {
+            gameView.resumeGame()
+        }
     }
 }
 
@@ -107,9 +167,10 @@ class GameView(context: Context) : View(context) {
     private var highScore = 0
     private var isRunning = false
     private var isPaused = false
+    private var baseSpeed = 300
     private val handler = Handler(Looper.getMainLooper())
     private val paint = Paint()
-    private val foodPaint = Paint().apply { color = Color.RED }
+    private val foodPaint = Paint()
     private val gridPaint = Paint().apply {
         color = Color.parseColor("#8FBC3A")
         style = Paint.Style.STROKE
@@ -127,7 +188,7 @@ class GameView(context: Context) : View(context) {
             if (isRunning && !isPaused) {
                 moveSnake()
                 invalidate()
-                val speed = Math.max(100, 300 - (score * 5))
+                val speed = Math.max(80, baseSpeed - (score * 3))
                 handler.postDelayed(this, speed.toLong())
             }
         }
@@ -135,6 +196,15 @@ class GameView(context: Context) : View(context) {
     
     fun setScoreListener(listener: ScoreListener) {
         scoreListener = listener
+    }
+    
+    fun setSpeed(level: String) {
+        baseSpeed = when (level) {
+            "easy" -> 350
+            "medium" -> 250
+            "hard" -> 180
+            else -> 300
+        }
     }
     
     fun changeDirection(newDirection: String) {
@@ -148,6 +218,10 @@ class GameView(context: Context) : View(context) {
     
     fun isGameRunning(): Boolean {
         return isRunning
+    }
+    
+    fun isPaused(): Boolean {
+        return isPaused
     }
     
     fun startGame() {
@@ -175,9 +249,11 @@ class GameView(context: Context) : View(context) {
         }
     }
     
-    fun restartGame() {
+    fun stopGame() {
+        isRunning = false
+        isPaused = false
         handler.removeCallbacks(gameRunnable)
-        startGame()
+        invalidate()
     }
     
     private fun moveSnake() {
@@ -242,24 +318,13 @@ class GameView(context: Context) : View(context) {
         val cellWidth = width / gridSize
         val cellHeight = height / gridSize
         
-        // Nokia green background
         canvas.drawColor(Color.parseColor("#9BBC0F"))
         
-        // Draw grid lines
         for (i in 0..gridSize) {
-            canvas.drawLine(
-                i * cellWidth, 0f,
-                i * cellWidth, height,
-                gridPaint
-            )
-            canvas.drawLine(
-                0f, i * cellHeight,
-                width, i * cellHeight,
-                gridPaint
-            )
+            canvas.drawLine(i * cellWidth, 0f, i * cellWidth, height, gridPaint)
+            canvas.drawLine(0f, i * cellHeight, width, i * cellHeight, gridPaint)
         }
         
-        // Draw food (dark green for Nokia feel)
         foodPaint.color = Color.parseColor("#0F380F")
         canvas.drawCircle(
             food.first * cellWidth + cellWidth / 2,
@@ -268,14 +333,9 @@ class GameView(context: Context) : View(context) {
             foodPaint
         )
         
-        // Draw snake
         for (i in snake.indices) {
             val segment = snake[i]
-            paint.color = if (i == 0) {
-                Color.parseColor("#306230")
-            } else {
-                Color.parseColor("#0F380F")
-            }
+            paint.color = if (i == 0) Color.parseColor("#306230") else Color.parseColor("#0F380F")
             canvas.drawRect(
                 segment.first * cellWidth + 2,
                 segment.second * cellHeight + 2,
@@ -285,25 +345,14 @@ class GameView(context: Context) : View(context) {
             )
         }
         
-        // Draw game over or start text
         if (!isRunning && snake.isNotEmpty()) {
-            val gameOverPaint = Paint().apply {
-                color = Color.parseColor("#0F380F")
-                textSize = 50f
-                textAlign = Paint.Align.CENTER
-                typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
-            }
-            canvas.drawText("GAME OVER", width / 2, height / 2, gameOverPaint)
-            canvas.drawText("Press START", width / 2, height / 2 + 50, gameOverPaint)
-        } else if (!isRunning && snake.isEmpty()) {
-            val startPaint = Paint().apply {
+            val textPaint = Paint().apply {
                 color = Color.parseColor("#0F380F")
                 textSize = 40f
                 textAlign = Paint.Align.CENTER
-                typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
+                typeface = Typeface.create("monospace", Typeface.BOLD)
             }
-            canvas.drawText("SNAKE XENZIA", width / 2, height / 2, startPaint)
-            canvas.drawText("Press START", width / 2, height / 2 + 50, startPaint)
+            canvas.drawText("GAME OVER", width / 2, height / 2, textPaint)
         }
     }
 }
