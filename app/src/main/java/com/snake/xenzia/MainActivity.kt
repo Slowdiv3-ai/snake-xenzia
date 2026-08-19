@@ -8,7 +8,6 @@ import android.graphics.Paint
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
@@ -30,13 +29,45 @@ class MainActivity : Activity() {
         restartButton = findViewById(R.id.restartButton)
         val gameContainer = findViewById<FrameLayout>(R.id.gameContainer)
         
-        // Create GameView programmatically
         gameView = GameView(this)
         gameContainer.addView(gameView)
         
         val highScore = getSharedPreferences("snake_prefs", Context.MODE_PRIVATE)
             .getInt("high_score", 0)
-        highScoreText.text = "High Score: $highScore"
+        highScoreText.text = "High: $highScore"
+        
+        // D-pad buttons
+        findViewById<Button>(R.id.btnUp).setOnClickListener {
+            gameView.changeDirection("up")
+        }
+        findViewById<Button>(R.id.btnDown).setOnClickListener {
+            gameView.changeDirection("down")
+        }
+        findViewById<Button>(R.id.btnLeft).setOnClickListener {
+            gameView.changeDirection("left")
+        }
+        findViewById<Button>(R.id.btnRight).setOnClickListener {
+            gameView.changeDirection("right")
+        }
+        findViewById<Button>(R.id.btnCenter).setOnClickListener {
+            if (!gameView.isGameRunning()) {
+                gameView.startGame()
+            }
+        }
+        
+        // A button = Restart
+        findViewById<Button>(R.id.btnA).setOnClickListener {
+            gameView.restartGame()
+        }
+        
+        // B button = Start/Pause
+        findViewById<Button>(R.id.btnB).setOnClickListener {
+            if (gameView.isGameRunning()) {
+                gameView.pauseGame()
+            } else {
+                gameView.startGame()
+            }
+        }
         
         restartButton.setOnClickListener {
             gameView.restartGame()
@@ -45,7 +76,7 @@ class MainActivity : Activity() {
         gameView.setScoreListener(object : GameView.ScoreListener {
             override fun onScoreUpdate(score: Int, highScore: Int) {
                 scoreText.text = "Score: $score"
-                highScoreText.text = "High Score: $highScore"
+                highScoreText.text = "High: $highScore"
             }
         })
     }
@@ -79,7 +110,11 @@ class GameView(context: Context) : View(context) {
     private val handler = Handler(Looper.getMainLooper())
     private val paint = Paint()
     private val foodPaint = Paint().apply { color = Color.RED }
-    private val gridPaint = Paint().apply { color = Color.DKGRAY }
+    private val gridPaint = Paint().apply {
+        color = Color.parseColor("#8FBC3A")
+        style = Paint.Style.STROKE
+        strokeWidth = 1f
+    }
     private var scoreListener: ScoreListener? = null
     
     init {
@@ -102,6 +137,19 @@ class GameView(context: Context) : View(context) {
         scoreListener = listener
     }
     
+    fun changeDirection(newDirection: String) {
+        if ((direction == "right" && newDirection != "left") ||
+            (direction == "left" && newDirection != "right") ||
+            (direction == "up" && newDirection != "down") ||
+            (direction == "down" && newDirection != "up")) {
+            nextDirection = newDirection
+        }
+    }
+    
+    fun isGameRunning(): Boolean {
+        return isRunning
+    }
+    
     fun startGame() {
         snake = mutableListOf(Pair(10, 10), Pair(9, 10), Pair(8, 10))
         direction = "right"
@@ -111,11 +159,13 @@ class GameView(context: Context) : View(context) {
         isPaused = false
         spawnFood()
         scoreListener?.onScoreUpdate(score, highScore)
+        handler.removeCallbacks(gameRunnable)
         handler.post(gameRunnable)
     }
     
     fun pauseGame() {
         isPaused = true
+        handler.removeCallbacks(gameRunnable)
     }
     
     fun resumeGame() {
@@ -192,18 +242,25 @@ class GameView(context: Context) : View(context) {
         val cellWidth = width / gridSize
         val cellHeight = height / gridSize
         
-        canvas.drawColor(Color.BLACK)
+        // Nokia green background
+        canvas.drawColor(Color.parseColor("#9BBC0F"))
         
-        for (i in 0 until gridSize) {
-            for (j in 0 until gridSize) {
-                canvas.drawRect(
-                    i * cellWidth, j * cellHeight,
-                    (i + 1) * cellWidth, (j + 1) * cellHeight,
-                    gridPaint
-                )
-            }
+        // Draw grid lines
+        for (i in 0..gridSize) {
+            canvas.drawLine(
+                i * cellWidth, 0f,
+                i * cellWidth, height,
+                gridPaint
+            )
+            canvas.drawLine(
+                0f, i * cellHeight,
+                width, i * cellHeight,
+                gridPaint
+            )
         }
         
+        // Draw food (dark green for Nokia feel)
+        foodPaint.color = Color.parseColor("#0F380F")
         canvas.drawCircle(
             food.first * cellWidth + cellWidth / 2,
             food.second * cellHeight + cellHeight / 2,
@@ -211,9 +268,14 @@ class GameView(context: Context) : View(context) {
             foodPaint
         )
         
+        // Draw snake
         for (i in snake.indices) {
             val segment = snake[i]
-            paint.color = if (i == 0) Color.YELLOW else Color.GREEN
+            paint.color = if (i == 0) {
+                Color.parseColor("#306230")
+            } else {
+                Color.parseColor("#0F380F")
+            }
             canvas.drawRect(
                 segment.first * cellWidth + 2,
                 segment.second * cellHeight + 2,
@@ -223,43 +285,25 @@ class GameView(context: Context) : View(context) {
             )
         }
         
+        // Draw game over or start text
         if (!isRunning && snake.isNotEmpty()) {
             val gameOverPaint = Paint().apply {
-                color = Color.WHITE
-                textSize = 60f
+                color = Color.parseColor("#0F380F")
+                textSize = 50f
                 textAlign = Paint.Align.CENTER
+                typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
             }
             canvas.drawText("GAME OVER", width / 2, height / 2, gameOverPaint)
-        }
-    }
-    
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> {
-                if (!isRunning) {
-                    startGame()
-                    return true
-                }
-                
-                val x = event.x
-                val y = event.y
-                val dx = x - width / 2f
-                val dy = y - height / 2f
-                
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    nextDirection = if (dx > 0) "right" else "left"
-                } else {
-                    nextDirection = if (dy > 0) "down" else "up"
-                }
-                
-                if ((direction == "right" && nextDirection != "left") ||
-                    (direction == "left" && nextDirection != "right") ||
-                    (direction == "up" && nextDirection != "down") ||
-                    (direction == "down" && nextDirection != "up")) {
-                    direction = nextDirection
-                }
+            canvas.drawText("Press START", width / 2, height / 2 + 50, gameOverPaint)
+        } else if (!isRunning && snake.isEmpty()) {
+            val startPaint = Paint().apply {
+                color = Color.parseColor("#0F380F")
+                textSize = 40f
+                textAlign = Paint.Align.CENTER
+                typeface = android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)
             }
+            canvas.drawText("SNAKE XENZIA", width / 2, height / 2, startPaint)
+            canvas.drawText("Press START", width / 2, height / 2 + 50, startPaint)
         }
-        return true
     }
 }
